@@ -17,6 +17,7 @@
 
 package io.openmessaging.storage.dledger.protocol;
 
+// 拉票的请求
 public class VoteRequest extends RequestOrResponse {
 
     private long ledgerEndIndex = -1;

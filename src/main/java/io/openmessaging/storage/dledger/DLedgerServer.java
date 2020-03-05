@@ -154,6 +154,7 @@ public class DLedgerServer implements DLedgerProtocolHander {
      * @throws IOException
      */
     @Override
+    // leader 处理写请求
     public CompletableFuture<AppendEntryResponse> handleAppend(AppendEntryRequest request) throws IOException {
         try {
             PreConditions.check(memberState.getSelfId().equals(request.getRemoteId()), DLedgerResponseCode.UNKNOWN_MEMBER, "%s != %s", request.getRemoteId(), memberState.getSelfId());
@@ -171,6 +172,7 @@ public class DLedgerServer implements DLedgerProtocolHander {
             } else {
                 DLedgerEntry dLedgerEntry = new DLedgerEntry();
                 dLedgerEntry.setBody(request.getBody());
+                // 写入本地存储
                 DLedgerEntry resEntry = dLedgerStore.appendAsLeader(dLedgerEntry);
                 return dLedgerEntryPusher.waitAck(resEntry);
             }

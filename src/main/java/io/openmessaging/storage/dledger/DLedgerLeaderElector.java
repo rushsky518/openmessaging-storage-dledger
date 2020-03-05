@@ -351,15 +351,18 @@ public class DLedgerLeaderElector {
     private List<CompletableFuture<VoteResponse>> voteForQuorumResponses(long term, long ledgerEndTerm,
         long ledgerEndIndex) throws Exception {
         List<CompletableFuture<VoteResponse>> responses = new ArrayList<>();
+        // 向所有人拉票，包括自己
         for (String id : memberState.getPeerMap().keySet()) {
             VoteRequest voteRequest = new VoteRequest();
             voteRequest.setGroup(memberState.getGroup());
             voteRequest.setLedgerEndIndex(ledgerEndIndex);
             voteRequest.setLedgerEndTerm(ledgerEndTerm);
+            // 选自己为 leader
             voteRequest.setLeaderId(memberState.getSelfId());
             voteRequest.setTerm(term);
             voteRequest.setRemoteId(id);
             CompletableFuture<VoteResponse> voteResponse;
+            // 如果是自己向自己拉票，则直接调用方法
             if (memberState.getSelfId().equals(id)) {
                 voteResponse = handleVote(voteRequest, true);
             } else {
@@ -464,6 +467,7 @@ public class DLedgerLeaderElector {
 
                         }
                     }
+                    // 选举出 leader，count down
                     if (alreadyHasLeader.get()
                         || memberState.isQuorum(acceptedNum.get())
                         || memberState.isQuorum(acceptedNum.get() + notReadyTermNum.get())) {
@@ -682,6 +686,7 @@ public class DLedgerLeaderElector {
         void shutdown();
     }
 
+    // leader follower candidate 3 种角色之间的选举活动
     public class StateMaintainer extends ShutdownAbleThread {
 
         public StateMaintainer(String name, Logger logger) {

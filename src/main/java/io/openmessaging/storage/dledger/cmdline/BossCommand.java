@@ -25,7 +25,7 @@ import java.util.Map;
 
 public class BossCommand {
 
-    public static void main(String args[]) {
+    public static void main(String[] args) {
         Map<String, BaseCommand> commands = new HashMap<>();
         commands.put("append", new AppendCommand());
         commands.put("get", new GetCommand());

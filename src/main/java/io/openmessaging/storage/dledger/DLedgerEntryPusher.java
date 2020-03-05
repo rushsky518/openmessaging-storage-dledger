@@ -137,6 +137,7 @@ public class DLedgerEntryPusher {
     public CompletableFuture<AppendEntryResponse> waitAck(DLedgerEntry entry) {
         updatePeerWaterMark(entry.getTerm(), memberState.getSelfId(), entry.getIndex());
         if (memberState.getPeerMap().size() == 1) {
+            // 单节点
             AppendEntryResponse response = new AppendEntryResponse();
             response.setGroup(memberState.getGroup());
             response.setLeaderId(memberState.getSelfId());
@@ -145,6 +146,7 @@ public class DLedgerEntryPusher {
             response.setPos(entry.getPos());
             return AppendFuture.newCompletedFuture(entry.getPos(), response);
         } else {
+            // 多节点
             checkTermForPendingMap(entry.getTerm(), "waitAck");
             AppendFuture<AppendEntryResponse> future = new AppendFuture<>(dLedgerConfig.getMaxWaitAckTimeMs());
             future.setPos(entry.getPos());

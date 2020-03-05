@@ -136,6 +136,7 @@ public class DLedgerRpcNettyService extends DLedgerRpcService {
     }
 
     @Override public CompletableFuture<VoteResponse> vote(VoteRequest request) throws Exception {
+        // 使用 1.8 的 CompletableFuture
         CompletableFuture<VoteResponse> future = new CompletableFuture<>();
         try {
             RemotingCommand wrapperRequest = RemotingCommand.createRequestCommand(DLedgerRequestCode.VOTE.getCode(), null);
@@ -144,6 +145,7 @@ public class DLedgerRpcNettyService extends DLedgerRpcService {
                 RemotingCommand responseCommand = responseFuture.getResponseCommand();
                 if (responseCommand != null) {
                     VoteResponse response = JSON.parseObject(responseCommand.getBody(), VoteResponse.class);
+                    // 在回调中设置 future 的值
                     future.complete(response);
                 } else {
                     future.completeExceptionally(new Exception("vote rpc call back timeout"));

@@ -22,11 +22,12 @@ import com.beust.jcommander.JCommander;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// raft 节点
 public class DLedger {
 
     private static Logger logger = LoggerFactory.getLogger(DLedger.class);
 
-    public static void main(String args[]) {
+    public static void main(String[] args) {
         DLedgerConfig dLedgerConfig = new DLedgerConfig();
         JCommander.newBuilder().addObject(dLedgerConfig).build().parse(args);
         DLedgerServer dLedgerServer = new DLedgerServer(dLedgerConfig);
