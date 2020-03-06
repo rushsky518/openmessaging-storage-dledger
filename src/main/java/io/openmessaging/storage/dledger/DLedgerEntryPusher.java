@@ -30,7 +30,10 @@ import io.openmessaging.storage.dledger.utils.DLedgerUtils;
 import io.openmessaging.storage.dledger.utils.Pair;
 import io.openmessaging.storage.dledger.utils.PreConditions;
 import io.openmessaging.storage.dledger.utils.Quota;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -39,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +57,7 @@ public class DLedgerEntryPusher {
 
     private DLedgerRpcService dLedgerRpcService;
 
+    // 任期 -> [节点id -> committedIndex]
     private Map<Long, ConcurrentMap<String, Long>> peerWaterMarksByTerm = new ConcurrentHashMap<>();
     private Map<Long, ConcurrentMap<Long, TimeoutFuture<AppendEntryResponse>>> pendingAppendResponsesByTerm = new ConcurrentHashMap<>();
 
@@ -146,7 +151,7 @@ public class DLedgerEntryPusher {
             response.setPos(entry.getPos());
             return AppendFuture.newCompletedFuture(entry.getPos(), response);
         } else {
-            // 多节点
+            // 多节点， AppendFuture 放入 pendingAppendResponsesByTerm 的 map 中
             checkTermForPendingMap(entry.getTerm(), "waitAck");
             AppendFuture<AppendEntryResponse> future = new AppendFuture<>(dLedgerConfig.getMaxWaitAckTimeMs());
             future.setPos(entry.getPos());
@@ -189,6 +194,7 @@ public class DLedgerEntryPusher {
                     waitForRunning(1);
                     return;
                 }
+
                 long currTerm = memberState.currTerm();
                 checkTermForPendingMap(currTerm, "QuorumAckChecker");
                 checkTermForWaterMark(currTerm, "QuorumAckChecker");
@@ -220,6 +226,8 @@ public class DLedgerEntryPusher {
                 }
                 Map<String, Long> peerWaterMarks = peerWaterMarksByTerm.get(currTerm);
 
+                // 这段代码的作用是找到超过半数的最大的 index
+/*
                 long quorumIndex = -1;
                 for (Long index : peerWaterMarks.values()) {
                     int num = 0;
@@ -228,10 +236,19 @@ public class DLedgerEntryPusher {
                             num++;
                         }
                     }
+                    // num 超过半数，则设置 quorumIndex
                     if (memberState.isQuorum(num) && index > quorumIndex) {
                         quorumIndex = index;
                     }
                 }
+*/
+                List<Long> sortedMarks = peerWaterMarks.values()
+                        .stream()
+                        .sorted((o1, o2) -> (int)(o2 - o1))
+                        .collect(Collectors.toList());
+                long quorumIndex = sortedMarks.get(sortedMarks.size() / 2);
+
+                // 确定 quorumIndex，并更新
                 dLedgerStore.updateCommittedIndex(currTerm, quorumIndex);
                 ConcurrentMap<Long, TimeoutFuture<AppendEntryResponse>> responses = pendingAppendResponsesByTerm.get(currTerm);
                 boolean needCheck = false;
@@ -321,6 +338,7 @@ public class DLedgerEntryPusher {
      *   |---<-----<------<-------<----|
      *
      */
+    // leader 执行
     private class EntryDispatcher extends ShutdownAbleThread {
 
         private AtomicReference<PushEntryRequest.Type> type = new AtomicReference<>(PushEntryRequest.Type.COMPARE);
@@ -402,6 +420,7 @@ public class DLedgerEntryPusher {
             PreConditions.check(entry != null, DLedgerResponseCode.UNKNOWN, "writeIndex=%d", index);
             checkQuotaAndWait(entry);
             PushEntryRequest request = buildPushRequest(entry, PushEntryRequest.Type.APPEND);
+            // 把日志推送给 followers
             CompletableFuture<PushEntryResponse> responseFuture = dLedgerRpcService.push(request);
             pendingMap.put(index, System.currentTimeMillis());
             responseFuture.whenComplete((x, ex) -> {
@@ -410,6 +429,7 @@ public class DLedgerEntryPusher {
                     DLedgerResponseCode responseCode = DLedgerResponseCode.valueOf(x.getCode());
                     switch (responseCode) {
                         case SUCCESS:
+                            // 收到 follower 对 append 的响应，更新 peer 的 watermark
                             pendingMap.remove(x.getIndex());
                             updatePeerWaterMark(x.getTerm(), peerId, x.getIndex());
                             quorumAckChecker.wakeup();
@@ -727,6 +747,7 @@ public class DLedgerEntryPusher {
      * Accept the push request and order it by the index, then append to ledger store one by one.
      *
      */
+    // follower 执行
     private class EntryHandler extends ShutdownAbleThread {
 
         private long lastCheckFastForwardTimeMs = System.currentTimeMillis();
@@ -981,6 +1002,7 @@ public class DLedgerEntryPusher {
         @Override
         public void doWork() {
             try {
+                // follower 执行这个逻辑
                 if (!memberState.isFollower()) {
                     waitForRunning(1);
                     return;
