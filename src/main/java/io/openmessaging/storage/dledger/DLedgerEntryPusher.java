@@ -75,6 +75,8 @@ public class DLedgerEntryPusher {
         this.dLedgerRpcService = dLedgerRpcService;
         for (String peer : memberState.getPeerMap().keySet()) {
             if (!peer.equals(memberState.getSelfId())) {
+                // 每个非本节点的 peer，创建一个 EntryDispatcher
+                // 对于 3 节点的集群，一个 leader，有两个激活的 EntryDispatcher
                 dispatcherMap.put(peer, new EntryDispatcher(peer, logger));
             }
         }
@@ -449,6 +451,7 @@ public class DLedgerEntryPusher {
             lastPushCommitTimeMs = System.currentTimeMillis();
         }
 
+        // doCommit 由 leader 发出，follower 调用 handleDoCommit
         private void doCommit() throws Exception {
             if (DLedgerUtils.elapsed(lastPushCommitTimeMs) > 1000) {
                 PushEntryRequest request = buildPushRequest(null, PushEntryRequest.Type.COMMIT);
@@ -725,6 +728,7 @@ public class DLedgerEntryPusher {
                     return;
                 }
 
+                // 在这里，我不理解为什么 type 会发生变化
                 if (type.get() == PushEntryRequest.Type.APPEND) {
                     if (dLedgerConfig.isEnableBatchPush()) {
                         doBatchAppend();
@@ -823,6 +827,7 @@ public class DLedgerEntryPusher {
             CompletableFuture<PushEntryResponse> future) {
             try {
                 PreConditions.check(writeIndex == request.getEntry().getIndex(), DLedgerResponseCode.INCONSISTENT_STATE);
+                // 添加到本地存储中
                 DLedgerEntry entry = dLedgerStore.appendAsFollower(request.getEntry(), request.getTerm(), request.getLeaderId());
                 PreConditions.check(entry.getIndex() == writeIndex, DLedgerResponseCode.INCONSISTENT_STATE);
                 future.complete(buildResponse(request, DLedgerResponseCode.SUCCESS.getCode()));
@@ -848,6 +853,7 @@ public class DLedgerEntryPusher {
             return future;
         }
 
+        // 对应 PushEntryRequest
         private CompletableFuture<PushEntryResponse> handleDoCommit(long committedIndex, PushEntryRequest request,
             CompletableFuture<PushEntryResponse> future) {
             try {
@@ -1024,6 +1030,7 @@ public class DLedgerEntryPusher {
                             break;
                     }
                 } else {
+                    // append 的 pushEntryRequest 走这个分支
                     long nextIndex = dLedgerStore.getLedgerEndIndex() + 1;
                     Pair<PushEntryRequest, CompletableFuture<PushEntryResponse>> pair = writeRequestMap.remove(nextIndex);
                     if (pair == null) {
