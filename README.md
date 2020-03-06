@@ -1,11 +1,15 @@
-开发笔记
+## 开发笔记
 启动 dledger 节点：
-io.openmessaging.storage.dledger.DLedger
+```
+启动类 io.openmessaging.storage.dledger.DLedger
 参数 --peers n0-localhost:10911;n1-localhost:10912 --id n0 --preferred-leader-id n0 --group zhang --store-base-dir D:/dledger/store0
+```
 
 启动命令行
-io.openmessaging.storage.dledger.cmdline.BossCommand
+```
+启动类 io.openmessaging.storage.dledger.cmdline.BossCommand
 参数 append --group zhang --peers n0-localhost:10911;n1-localhost:10912 -d "Hello World"
+```
 
 ## Introduction
 [![Build Status](https://travis-ci.org/openmessaging/openmessaging-storage-dledger.svg?branch=master)](https://travis-ci.org/openmessaging/openmessaging-storage-dledger) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.openmessaging.storage/dledger/badge.svg)](http://search.maven.org/#search%7Cga%7C1%7Copenmessaging-storage-dledger)  [![Coverage Status](https://coveralls.io/repos/github/openmessaging/openmessaging-storage-dledger/badge.svg?branch=master)](https://coveralls.io/github/openmessaging/openmessaging-storage-dledger?branch=master) [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
