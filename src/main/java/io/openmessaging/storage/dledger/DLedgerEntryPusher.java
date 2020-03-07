@@ -775,6 +775,7 @@ public class DLedgerEntryPusher {
                     } else {
                         PreConditions.check(request.getEntry() != null, DLedgerResponseCode.UNEXPECTED_ARGUMENT);
                         long index = request.getEntry().getIndex();
+                        // push 请求放入 writeRequestMap 中
                         Pair<PushEntryRequest, CompletableFuture<PushEntryResponse>> old = writeRequestMap.putIfAbsent(index, new Pair<>(request, future));
                         if (old != null) {
                             logger.warn("[MONITOR]The index {} has already existed with {} and curr is {}", index, old.getKey().baseInfo(), request.baseInfo());
@@ -830,6 +831,7 @@ public class DLedgerEntryPusher {
                 // 添加到本地存储中
                 DLedgerEntry entry = dLedgerStore.appendAsFollower(request.getEntry(), request.getTerm(), request.getLeaderId());
                 PreConditions.check(entry.getIndex() == writeIndex, DLedgerResponseCode.INCONSISTENT_STATE);
+                // 完成 PushEntryResponse
                 future.complete(buildResponse(request, DLedgerResponseCode.SUCCESS.getCode()));
                 dLedgerStore.updateCommittedIndex(request.getTerm(), request.getCommitIndex());
             } catch (Throwable t) {
@@ -1032,6 +1034,7 @@ public class DLedgerEntryPusher {
                 } else {
                     // append 的 pushEntryRequest 走这个分支
                     long nextIndex = dLedgerStore.getLedgerEndIndex() + 1;
+                    // 从 writeRequestMap 中取出 PushEntryRequest
                     Pair<PushEntryRequest, CompletableFuture<PushEntryResponse>> pair = writeRequestMap.remove(nextIndex);
                     if (pair == null) {
                         checkAbnormalFuture(dLedgerStore.getLedgerEndIndex());

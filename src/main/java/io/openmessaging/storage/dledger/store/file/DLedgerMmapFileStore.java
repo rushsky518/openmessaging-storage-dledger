@@ -43,12 +43,15 @@ public class DLedgerMmapFileStore extends DLedgerStore {
     public static final String COMMITTED_INDEX_KEY = "committedIndex";
     public static final int MAGIC_1 = 1;
     public static final int CURRENT_MAGIC = MAGIC_1;
+    // index 的大小是固定的
     public static final int INDEX_UNIT_SIZE = 32;
 
     private static Logger logger = LoggerFactory.getLogger(DLedgerMmapFileStore.class);
     public List<AppendHook> appendHooks = new ArrayList<>();
     private long ledgerBeginIndex = -1;
+    // 写入本地存储的最后的 index
     private long ledgerEndIndex = -1;
+    // 已提交的最后的 index
     private long committedIndex = -1;
     private long committedPos = -1;
     private long ledgerEndTerm;
@@ -343,10 +346,20 @@ public class DLedgerMmapFileStore extends DLedgerStore {
             for (AppendHook writeHook : appendHooks) {
                 writeHook.doHook(entry, dataBuffer.slice(), DLedgerEntry.BODY_OFFSET);
             }
+            // 写 data
             long dataPos = dataFileList.append(dataBuffer.array(), 0, dataBuffer.remaining());
             PreConditions.check(dataPos != -1, DLedgerResponseCode.DISK_ERROR, null);
             PreConditions.check(dataPos == prePos, DLedgerResponseCode.DISK_ERROR, null);
+            /**
+             * dataPos 数据的起始位置
+             * entrySize 数据大小
+             * magic 魔数
+             * nextIndex 当前下标
+             * currTerm 当前任期
+             * indexBuffer 装 index 的 byte 容器
+              */
             DLedgerEntryCoder.encodeIndex(dataPos, entrySize, CURRENT_MAGIC, nextIndex, memberState.currTerm(), indexBuffer);
+            // 写 index
             long indexPos = indexFileList.append(indexBuffer.array(), 0, indexBuffer.remaining(), false);
             PreConditions.check(indexPos == entry.getIndex() * INDEX_UNIT_SIZE, DLedgerResponseCode.DISK_ERROR, null);
             if (logger.isDebugEnabled()) {

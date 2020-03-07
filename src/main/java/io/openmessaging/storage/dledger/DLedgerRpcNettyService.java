@@ -320,9 +320,11 @@ public class DLedgerRpcNettyService extends DLedgerRpcService {
                 }, futureExecutor);
                 break;
             }
+            // leader 推送日志给 followers
             case PUSH: {
                 PushEntryRequest pushEntryRequest = JSON.parseObject(request.getBody(), PushEntryRequest.class);
                 CompletableFuture<PushEntryResponse> future = handlePush(pushEntryRequest);
+                // 当 future.complete 之后，写响应
                 future.whenCompleteAsync((x, y) -> {
                     writeResponse(x, y, request, ctx);
                 }, futureExecutor);
