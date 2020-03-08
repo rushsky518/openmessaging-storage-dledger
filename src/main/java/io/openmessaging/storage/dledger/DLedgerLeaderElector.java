@@ -188,32 +188,48 @@ public class DLedgerLeaderElector {
         handleRoleChange(term, MemberState.Role.FOLLOWER);
     }
 
+    /**
+     * 一轮任期只能投票一次
+     *
+     * 什么情况下，同意拉票请求？
+     * 自身和拉票节点处于相同任期，
+     * 自身没有投票给其他节点，
+     * 自身的日志最后任期小于等于拉票节点的日志最后任期，
+     * 自身的日志最后 index 小于等于拉票节点的日志最后 index
+     */
     public CompletableFuture<VoteResponse> handleVote(VoteRequest request, boolean self) {
         //hold the lock to get the latest term, leaderId, ledgerEndIndex
         synchronized (memberState) {
+            // 拉票节点不属于 peers
             if (!memberState.isPeerMember(request.getLeaderId())) {
                 logger.warn("[BUG] [HandleVote] remoteId={} is an unknown member", request.getLeaderId());
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_UNKNOWN_LEADER));
             }
+            // 拉票节点的 id 和自身的 id 冲突
             if (!self && memberState.getSelfId().equals(request.getLeaderId())) {
                 logger.warn("[BUG] [HandleVote] selfId={} but remoteId={}", memberState.getSelfId(), request.getLeaderId());
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_UNEXPECTED_LEADER));
             }
+            // 拉票的任期小于自身的任期
             if (request.getTerm() < memberState.currTerm()) {
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_EXPIRED_VOTE_TERM));
-            } else if (request.getTerm() == memberState.currTerm()) {
+            } else if (request.getTerm() == memberState.currTerm()) { // 任期相等
                 if (memberState.currVoteFor() == null) {
                     //let it go
                 } else if (memberState.currVoteFor().equals(request.getLeaderId())) {
                     //repeat just let it go
                 } else {
+                    // 已经有 leader
                     if (memberState.getLeaderId() != null) {
                         return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_ALREADY_HAS_LEADER));
                     } else {
+                        // 已经投过票
                         return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_ALREADY_VOTED));
                     }
                 }
             } else {
+                // 拉票任期大于自身的任期
+                // 先增加自身的任期，拒绝本次拉票，等任期相等后，才会投票给拉票节点
                 //stepped down by larger term
                 changeRoleToCandidate(request.getTerm());
                 needIncreaseTermImmediately = true;
@@ -223,15 +239,19 @@ public class DLedgerLeaderElector {
 
             //assert acceptedTerm is true
             if (request.getLedgerEndTerm() < memberState.getLedgerEndTerm()) {
+                // 拉票节点的最后日志的任期小于自身
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_EXPIRED_LEDGER_TERM));
             } else if (request.getLedgerEndTerm() == memberState.getLedgerEndTerm() && request.getLedgerEndIndex() < memberState.getLedgerEndIndex()) {
+                // 拉票节点的最后日志的 index 小于自身
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_SMALL_LEDGER_END_INDEX));
             }
 
+            // 拉票节点的任期小于自身的最后日志的任期
             if (request.getTerm() < memberState.getLedgerEndTerm()) {
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.getLedgerEndTerm()).voteResult(VoteResponse.RESULT.REJECT_TERM_SMALL_THAN_LEDGER));
             }
 
+            // 自身已获得多数投票
             if (!self && isTakingLeadership() && request.getLedgerEndTerm() == memberState.getLedgerEndTerm() && memberState.getLedgerEndIndex() >= request.getLedgerEndIndex()) {
                 return CompletableFuture.completedFuture(new VoteResponse(request).term(memberState.currTerm()).voteResult(VoteResponse.RESULT.REJECT_TAKING_LEADERSHIP));
             }

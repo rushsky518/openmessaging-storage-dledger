@@ -288,6 +288,7 @@ public class DLedgerRpcNettyService extends DLedgerRpcService {
     public RemotingCommand processRequest(ChannelHandlerContext ctx, RemotingCommand request) throws Exception {
         DLedgerRequestCode requestCode = DLedgerRequestCode.valueOf(request.getCode());
         switch (requestCode) {
+            // 客户端获取节点的信息，leaderId
             case METADATA: {
                 MetadataRequest metadataRequest = JSON.parseObject(request.getBody(), MetadataRequest.class);
                 CompletableFuture<MetadataResponse> future = handleMetadata(metadataRequest);
@@ -296,6 +297,8 @@ public class DLedgerRpcNettyService extends DLedgerRpcService {
                 }, futureExecutor);
                 break;
             }
+            // 客户端发出 append 请求
+            // 如果 follower 收到 append 请求，返回错误，客户端重新获取元数据，再次向 leaderId 发起 append 请求
             case APPEND: {
                 AppendEntryRequest appendEntryRequest = JSON.parseObject(request.getBody(), AppendEntryRequest.class);
                 CompletableFuture<AppendEntryResponse> future = handleAppend(appendEntryRequest);
@@ -304,6 +307,7 @@ public class DLedgerRpcNettyService extends DLedgerRpcService {
                 }, futureExecutor);
                 break;
             }
+            // 客户端发出 get 请求
             case GET: {
                 GetEntriesRequest getEntriesRequest = JSON.parseObject(request.getBody(), GetEntriesRequest.class);
                 CompletableFuture<GetEntriesResponse> future = handleGet(getEntriesRequest);
@@ -330,6 +334,7 @@ public class DLedgerRpcNettyService extends DLedgerRpcService {
                 }, futureExecutor);
                 break;
             }
+            // 收到拉票请求
             case VOTE: {
                 VoteRequest voteRequest = JSON.parseObject(request.getBody(), VoteRequest.class);
                 CompletableFuture<VoteResponse> future = handleVote(voteRequest);

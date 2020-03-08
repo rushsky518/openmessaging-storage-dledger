@@ -49,9 +49,11 @@ public class DLedgerClient {
 
     public DLedgerClient(String group, String peers) {
         this.group = group;
+        // 读取配置中的 peers
         updatePeers(peers);
         dLedgerClientRpcService = new DLedgerClientRpcNettyService();
         dLedgerClientRpcService.updatePeers(peers);
+        // 随意取一个 leaderId
         leaderId = peerMap.keySet().iterator().next();
     }
 
