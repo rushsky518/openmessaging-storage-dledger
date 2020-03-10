@@ -433,6 +433,7 @@ public class DLedgerMmapFileStore extends DLedgerStore {
         DLedgerEntryCoder.encode(entry, dataBuffer);
         int entrySize = dataBuffer.remaining();
         synchronized (memberState) {
+            // follower 在接受 leader 的日志时，检查请求的 term 和 index 和自身是否相等
             PreConditions.check(memberState.isFollower(), DLedgerResponseCode.NOT_FOLLOWER, "role=%s", memberState.getRole());
             long nextIndex = ledgerEndIndex + 1;
             PreConditions.check(nextIndex == entry.getIndex(), DLedgerResponseCode.INCONSISTENT_INDEX, null);
@@ -494,11 +495,13 @@ public class DLedgerMmapFileStore extends DLedgerStore {
         SelectMmapBufferResult indexSbr = null;
         SelectMmapBufferResult dataSbr = null;
         try {
+            // 读取 index 文件
             indexSbr = indexFileList.getData(index * INDEX_UNIT_SIZE, INDEX_UNIT_SIZE);
             PreConditions.check(indexSbr != null && indexSbr.getByteBuffer() != null, DLedgerResponseCode.DISK_ERROR, "Get null index for %d", index);
             indexSbr.getByteBuffer().getInt(); //magic
             long pos = indexSbr.getByteBuffer().getLong();
             int size = indexSbr.getByteBuffer().getInt();
+            // 读取 data 文件
             dataSbr = dataFileList.getData(pos, size);
             PreConditions.check(dataSbr != null && dataSbr.getByteBuffer() != null, DLedgerResponseCode.DISK_ERROR, "Get null data for %d", index);
             DLedgerEntry dLedgerEntry = DLedgerEntryCoder.decode(dataSbr.getByteBuffer());

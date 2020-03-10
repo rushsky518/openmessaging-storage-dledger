@@ -343,6 +343,7 @@ public class DLedgerEntryPusher {
     // leader 执行
     private class EntryDispatcher extends ShutdownAbleThread {
 
+        // 初始状态为 compare
         private AtomicReference<PushEntryRequest.Type> type = new AtomicReference<>(PushEntryRequest.Type.COMPARE);
         private long lastPushCommitTimeMs = -1;
         private String peerId;
@@ -647,6 +648,7 @@ public class DLedgerEntryPusher {
                 }
                 //revise the compareIndex
                 if (compareIndex == -1) {
+                    // 设置 compareIndex 为最新的 index
                     compareIndex = dLedgerStore.getLedgerEndIndex();
                     logger.info("[Push-{}][DoCompare] compareIndex=-1 means start to compare", peerId);
                 } else if (compareIndex > dLedgerStore.getLedgerEndIndex() || compareIndex < dLedgerStore.getLedgerBeginIndex()) {
@@ -664,16 +666,19 @@ public class DLedgerEntryPusher {
                     , DLedgerResponseCode.valueOf(response.getCode()), "compareIndex=%d", compareIndex);
                 long truncateIndex = -1;
 
+                // leader 节点和 follower 节点在 compareIndex 处的 entry 完全相同
                 if (response.getCode() == DLedgerResponseCode.SUCCESS.getCode()) {
                     /*
                      * The comparison is successful:
                      * 1.Just change to append state, if the follower's end index is equal the compared index.
                      * 2.Truncate the follower, if the follower has some dirty entries.
                      */
+                    // follower 最后 index 也等于 compareIndex，直接切换为 append 模式
                     if (compareIndex == response.getEndIndex()) {
                         changeState(compareIndex, PushEntryRequest.Type.APPEND);
                         break;
                     } else {
+                        // follower 的最后 index 大于 compareIndex，则 leader 截断 follower 的日志
                         truncateIndex = compareIndex;
                     }
                 } else if (response.getEndIndex() < dLedgerStore.getLedgerBeginIndex()
@@ -728,7 +733,8 @@ public class DLedgerEntryPusher {
                     return;
                 }
 
-                // 在这里，我不理解为什么 type 会发生变化
+                // 节点成为 leader 后，需要和 follower 比较最后的日志 index
+                // 同步好后，才知道从哪个地方开始复制日志给 follower
                 if (type.get() == PushEntryRequest.Type.APPEND) {
                     if (dLedgerConfig.isEnableBatchPush()) {
                         doBatchAppend();
