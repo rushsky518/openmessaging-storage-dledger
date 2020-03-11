@@ -225,7 +225,7 @@ public class DLedgerEntryPusher {
                         .stream()
                         .sorted(Comparator.reverseOrder())
                         .collect(Collectors.toList());
-                long quorumIndex = sortedWaterMarks.get(sortedWaterMarks.size() / 2);
+                long quorumIndex = sortedWaterMarks.get(sortedWaterMarks.size() >> 1);
                 dLedgerStore.updateCommittedIndex(currTerm, quorumIndex);
                 ConcurrentMap<Long, TimeoutFuture<AppendEntryResponse>> responses = pendingAppendResponsesByTerm.get(currTerm);
                 boolean needCheck = false;
