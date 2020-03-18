@@ -55,7 +55,6 @@ public class MemberState {
     private Map<String, Boolean> peersLiveTable = new ConcurrentHashMap<>();
 
     private volatile String transferee;
-    private volatile long termToTakeLeadership = -1;
 
     public MemberState(DLedgerConfig config) {
         this.group = config.getGroup();
@@ -161,14 +160,6 @@ public class MemberState {
     public void setTransferee(String transferee) {
         PreConditions.check(role == LEADER, DLedgerResponseCode.ILLEGAL_MEMBER_STATE, "%s is not leader", selfId);
         this.transferee = transferee;
-    }
-
-    public long getTermToTakeLeadership() {
-        return termToTakeLeadership;
-    }
-
-    public void setTermToTakeLeadership(long termToTakeLeadership) {
-        this.termToTakeLeadership = termToTakeLeadership;
     }
 
     public String getSelfId() {

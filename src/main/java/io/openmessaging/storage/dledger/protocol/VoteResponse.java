@@ -65,9 +65,11 @@ public class VoteResponse extends RequestOrResponse {
     }
 
     public enum ParseResult {
+        // 在当前任期重新投票
         WAIT_TO_REVOTE,
         REVOTE_IMMEDIATELY,
         PASSED,
+        // 下一轮选举，任期会增长
         WAIT_TO_VOTE_NEXT;
     }
 }

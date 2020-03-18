@@ -64,7 +64,7 @@ public class LeaderElectorTest extends ServerTestHarness {
         servers.add(launchServer(group, peers, "n0"));
         servers.add(launchServer(group, peers, "n1"));
         servers.add(launchServer(group, peers, "n2"));
-        Thread.sleep(1000);
+        Thread.sleep(3000);
         AtomicInteger leaderNum = new AtomicInteger(0);
         AtomicInteger followerNum = new AtomicInteger(0);
         DLedgerServer leaderServer = parseServers(servers, leaderNum, followerNum);
@@ -82,9 +82,10 @@ public class LeaderElectorTest extends ServerTestHarness {
                     return 0;
                 }
             }).get().getMemberState().currTerm();
+            // 随机选一个节点，增加 term，开始拉票，选举结束，它必然成为新的 leader？
             DLedgerServer candidate = servers.get(i % servers.size());
             candidate.getdLedgerLeaderElector().testRevote(maxTerm + 1);
-            Thread.sleep(100);
+            Thread.sleep(1000);
             leaderNum.set(0);
             followerNum.set(0);
             leaderServer = parseServers(servers, leaderNum, followerNum);

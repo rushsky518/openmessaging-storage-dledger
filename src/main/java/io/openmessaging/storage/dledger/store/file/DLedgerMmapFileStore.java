@@ -629,7 +629,7 @@ public class DLedgerMmapFileStore extends DLedgerStore {
                 if (timeUp || checkExpired) {
                     int count = getDataFileList().deleteExpiredFileByTime(fileReservedTimeMs, 100, 120 * 1000, forceClean && enableForceClean);
                     if (count > 0 || (forceClean && enableForceClean) || isDiskFull) {
-                        logger.info("Clean space count={} timeUp={} checkExpired={} forceClean={} enableForceClean={} diskFull={} storeBaseRatio={} dataRatio={}",
+                        logger.debug("Clean space count={} timeUp={} checkExpired={} forceClean={} enableForceClean={} diskFull={} storeBaseRatio={} dataRatio={}",
                             count, timeUp, checkExpired, forceClean, enableForceClean, isDiskFull, storeBaseRatio, dataRatio);
                     }
                     if (count > 0) {

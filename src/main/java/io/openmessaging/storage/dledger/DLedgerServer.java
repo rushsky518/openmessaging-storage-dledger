@@ -85,10 +85,15 @@ public class DLedgerServer implements DLedgerProtocolHander {
 
 
     public void startup() {
+        // 存储
         this.dLedgerStore.startup();
+        // 网络
         this.dLedgerRpcService.startup();
+        // 日志追加 push 给 follower
         this.dLedgerEntryPusher.startup();
+        // 选举
         this.dLedgerLeaderElector.startup();
+        // 定期检查 preferredLeader，只有在自己是 leader 时，可以把 leader 转移给指定的节点
         executorService.scheduleAtFixedRate(this::checkPreferredLeader, 1000, 1000, TimeUnit.MILLISECONDS);
     }
 
@@ -287,29 +292,35 @@ public class DLedgerServer implements DLedgerProtocolHander {
     }
 
     private void checkPreferredLeader() {
+        // 当前节点不是 leader，返回
         if (!memberState.isLeader()) {
             return;
         }
         String preferredLeaderId = dLedgerConfig.getPreferredLeaderId();
-        if (preferredLeaderId == null || preferredLeaderId.equals(dLedgerConfig.getSelfId())) {
+        // 没有配置优选 leader，或者当前 leader 已经是优选 leader
+        if (preferredLeaderId == null || preferredLeaderId.equals(memberState.getLeaderId())) {
             return;
         }
 
+        // 配置的优选 leader 不在 peers 中
         if (!memberState.isPeerMember(preferredLeaderId)) {
             logger.warn("preferredLeaderId = {} is not a peer member", preferredLeaderId);
             return;
         }
 
+        // 已经设置了接收 leader 地位的节点，返回
         if (memberState.getTransferee() != null) {
             return;
         }
 
+        // 优选 leader 不活跃
         if (!memberState.getPeersLiveTable().containsKey(preferredLeaderId) ||
             memberState.getPeersLiveTable().get(preferredLeaderId) == Boolean.FALSE) {
             logger.warn("preferredLeaderId = {} is not online", preferredLeaderId);
             return;
         }
 
+        // 如果优选 leader 的日志落后太多，返回
         long fallBehind = dLedgerStore.getLedgerEndIndex() - dLedgerEntryPusher.getPeerWaterMark(memberState.currTerm(), preferredLeaderId);
         logger.info("transferee fall behind index : {}", fallBehind);
         if (fallBehind < dLedgerConfig.getMaxLeadershipTransferWaitIndex()) {
@@ -319,6 +330,7 @@ public class DLedgerServer implements DLedgerProtocolHander {
 
             try {
                 long startTransferTime = System.currentTimeMillis();
+                // leader 开始构造请求
                 LeadershipTransferResponse response = dLedgerLeaderElector.handleLeadershipTransfer(request).get();
                 logger.info("transfer finished. request={},response={},cost={}ms", request, response, DLedgerUtils.elapsed(startTransferTime));
             } catch (Throwable t) {
