@@ -482,6 +482,7 @@ public class DLedgerLeaderElector {
                                 biggerLedgerNum.incrementAndGet();
                                 break;
                             case REJECT_TERM_NOT_READY:
+                                // 自己的任期比对方节点大，对方节点转换成 candidate
                                 notReadyTermNum.incrementAndGet();
                                 break;
                             default:
@@ -524,7 +525,7 @@ public class DLedgerLeaderElector {
             parseResult = VoteResponse.ParseResult.WAIT_TO_REVOTE;
             nextTimeToRequestVote = getNextTimeToRequestVote() + heartBeatTimeIntervalMs * maxHeartBeatLeak;
         } else if (!memberState.isQuorum(validNum.get())) {
-            // 收到的响应（响应码包括成功和失败）小于半数
+            // 收到的响应（响应码包括拉票成功和拉票失败）小于半数
             // 原因之一：其他的节点没有启动
             parseResult = VoteResponse.ParseResult.WAIT_TO_REVOTE;
             nextTimeToRequestVote = getNextTimeToRequestVote();
@@ -532,11 +533,14 @@ public class DLedgerLeaderElector {
             // 获得的投票过半
             parseResult = VoteResponse.ParseResult.PASSED;
         } else if (memberState.isQuorum(acceptedNum.get() + notReadyTermNum.get())) {
+            // 拉到的票数 + 任期比自己小的节点数 >= 半数
             parseResult = VoteResponse.ParseResult.REVOTE_IMMEDIATELY;
         } else if (memberState.isQuorum(acceptedNum.get() + biggerLedgerNum.get())) {
             parseResult = VoteResponse.ParseResult.WAIT_TO_REVOTE;
             nextTimeToRequestVote = getNextTimeToRequestVote();
         } else {
+            // 选票被瓜分的情形下，走这个分支
+            // 4 个节点，得 1 票或者的 2 票，都会增加任期，开始下一轮投票
             parseResult = VoteResponse.ParseResult.WAIT_TO_VOTE_NEXT;
             nextTimeToRequestVote = getNextTimeToRequestVote();
         }
