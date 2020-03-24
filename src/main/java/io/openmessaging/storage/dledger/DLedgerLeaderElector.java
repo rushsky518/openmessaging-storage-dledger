@@ -64,6 +64,7 @@ public class DLedgerLeaderElector {
     private List<RoleChangeHandler> roleChangeHandlers = new ArrayList<>();
 
     private VoteResponse.ParseResult lastParseResult = VoteResponse.ParseResult.WAIT_TO_REVOTE;
+    // 上一次拉票到收到响应（或者超时）消耗的时间
     private long lastVoteCost = 0L;
 
     private StateMaintainer stateMaintainer = new StateMaintainer("StateMaintainer", logger);
@@ -407,6 +408,7 @@ public class DLedgerLeaderElector {
             return System.currentTimeMillis() + dLedgerConfig.getMinTakeLeadershipVoteIntervalMs() +
                 random.nextInt(dLedgerConfig.getMaxTakeLeadershipVoteIntervalMs() - dLedgerConfig.getMinTakeLeadershipVoteIntervalMs());
         }
+        // 加上 lastVoteCost 的原因可能是，等待其他节点完成拉票的动作
         return System.currentTimeMillis() + lastVoteCost + minVoteIntervalMs + random.nextInt(maxVoteIntervalMs - minVoteIntervalMs);
     }
 

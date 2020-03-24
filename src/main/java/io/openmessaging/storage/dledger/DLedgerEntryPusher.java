@@ -61,9 +61,9 @@ public class DLedgerEntryPusher {
     private Map<Long, ConcurrentMap<String, Long>> peerWaterMarksByTerm = new ConcurrentHashMap<>();
     private Map<Long, ConcurrentMap<Long, TimeoutFuture<AppendEntryResponse>>> pendingAppendResponsesByTerm = new ConcurrentHashMap<>();
 
-    private EntryHandler entryHandler = new EntryHandler(logger);
+    private EntryHandler entryHandler;
 
-    private QuorumAckChecker quorumAckChecker = new QuorumAckChecker(logger);
+    private QuorumAckChecker quorumAckChecker;
 
     private Map<String, EntryDispatcher> dispatcherMap = new HashMap<>();
 
@@ -80,6 +80,8 @@ public class DLedgerEntryPusher {
                 dispatcherMap.put(peer, new EntryDispatcher(peer, logger));
             }
         }
+        this.entryHandler = new EntryHandler(logger);
+        this.quorumAckChecker = new QuorumAckChecker(logger);
     }
 
     public void startup() {
@@ -181,7 +183,7 @@ public class DLedgerEntryPusher {
         private long lastQuorumIndex = -1;
 
         public QuorumAckChecker(Logger logger) {
-            super("QuorumAckChecker", logger);
+            super("QuorumAckChecker-" + memberState.getSelfId(), logger);
         }
 
         @Override
@@ -246,7 +248,7 @@ public class DLedgerEntryPusher {
 */
                 List<Long> sortedMarks = peerWaterMarks.values()
                         .stream()
-                        .sorted((o1, o2) -> (int)(o2 - o1))
+                        .sorted(Collections.reverseOrder())
                         .collect(Collectors.toList());
                 long quorumIndex = sortedMarks.get(sortedMarks.size() / 2);
 
@@ -255,29 +257,31 @@ public class DLedgerEntryPusher {
                 ConcurrentMap<Long, TimeoutFuture<AppendEntryResponse>> responses = pendingAppendResponsesByTerm.get(currTerm);
                 boolean needCheck = false;
                 int ackNum = 0;
-                if (quorumIndex >= 0) {
-                    for (Long i = quorumIndex; i >= 0; i--) {
-                        try {
-                            CompletableFuture<AppendEntryResponse> future = responses.remove(i);
-                            if (future == null) {
-                                needCheck = lastQuorumIndex != -1 && lastQuorumIndex != quorumIndex && i != lastQuorumIndex;
-                                break;
-                            } else if (!future.isDone()) {
-                                AppendEntryResponse response = new AppendEntryResponse();
-                                response.setGroup(memberState.getGroup());
-                                response.setTerm(currTerm);
-                                response.setIndex(i);
-                                response.setLeaderId(memberState.getSelfId());
-                                response.setPos(((AppendFuture) future).getPos());
-                                future.complete(response);
-                            }
-                            ackNum++;
-                        } catch (Throwable t) {
-                            logger.error("Error in ack to index={} term={}", i, currTerm, t);
+                for (Long i = quorumIndex; i > lastQuorumIndex; i--) {
+                    try {
+                        // 取出 future
+                        CompletableFuture<AppendEntryResponse> future = responses.remove(i);
+                        if (future == null) {
+                            //   && lastQuorumIndex != quorumIndex && i != lastQuorumInde
+                            needCheck = lastQuorumIndex != -1;
+                            break;
+                        } else if (!future.isDone()) {
+                            // 完成 future
+                            AppendEntryResponse response = new AppendEntryResponse();
+                            response.setGroup(memberState.getGroup());
+                            response.setTerm(currTerm);
+                            response.setIndex(i);
+                            response.setLeaderId(memberState.getSelfId());
+                            response.setPos(((AppendFuture) future).getPos());
+                            future.complete(response);
                         }
+                        ackNum++;
+                    } catch (Throwable t) {
+                        logger.error("Error in ack to index={} term={}", i, currTerm, t);
                     }
                 }
 
+                // 检查 future 是否超时
                 if (ackNum == 0) {
                     for (long i = quorumIndex + 1; i < Integer.MAX_VALUE; i++) {
                         TimeoutFuture<AppendEntryResponse> future = responses.get(i);
@@ -302,6 +306,7 @@ public class DLedgerEntryPusher {
                     updatePeerWaterMark(currTerm, memberState.getSelfId(), dLedgerStore.getLedgerEndIndex());
                     for (Map.Entry<Long, TimeoutFuture<AppendEntryResponse>> futureEntry : responses.entrySet()) {
                         if (futureEntry.getKey() < quorumIndex) {
+                            // 查漏补缺
                             AppendEntryResponse response = new AppendEntryResponse();
                             response.setGroup(memberState.getGroup());
                             response.setTerm(currTerm);
@@ -766,7 +771,7 @@ public class DLedgerEntryPusher {
         BlockingQueue<Pair<PushEntryRequest, CompletableFuture<PushEntryResponse>>> compareOrTruncateRequests = new ArrayBlockingQueue<Pair<PushEntryRequest, CompletableFuture<PushEntryResponse>>>(100);
 
         public EntryHandler(Logger logger) {
-            super("EntryHandler", logger);
+            super("EntryHandler-" + memberState.getSelfId(), logger);
         }
 
         public CompletableFuture<PushEntryResponse> handlePush(PushEntryRequest request) throws Exception {

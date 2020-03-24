@@ -302,6 +302,9 @@ public class DLedgerRpcNettyService extends DLedgerRpcService {
             case APPEND: {
                 AppendEntryRequest appendEntryRequest = JSON.parseObject(request.getBody(), AppendEntryRequest.class);
                 CompletableFuture<AppendEntryResponse> future = handleAppend(appendEntryRequest);
+                // 当 future 完成之后，把响应写到 channel 中
+                // 创建 future 在 DLedgerEntryPusher.waitAck 中
+                // 触发完成 future 在 DLedgerEntryPusher.QuorumAckChecker.doWork
                 future.whenCompleteAsync((x, y) -> {
                     writeResponse(x, y, request, ctx);
                 }, futureExecutor);
